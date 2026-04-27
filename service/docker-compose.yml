@@ -6,7 +6,8 @@ services:
     image: notebooklm-service:local
     container_name: notebooklm-service
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       NOTEBOOKLM_HOME: /data
       NOTEBOOKLM_STORAGE_PATH: /data/storage_state.json

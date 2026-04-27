@@ -39,11 +39,14 @@ COPY src /app/src
 COPY service /app/service
 COPY pyproject.toml README.md /app/
 
-# Non-root runtime user. /nix/store is world-readable so this is safe.
-RUN adduser -D -u 10001 nlm \
- && mkdir -p /data \
- && chown -R nlm:nlm /data /app
-USER nlm
+# Non-root runtime via numeric UID/GID. The nixos/nix base manages /etc/passwd
+# and /etc/group as nix-controlled symlinks that don't tolerate `groupadd`/
+# `useradd`, so we skip name registration entirely. /nix/store is world-readable
+# so unnamed UIDs can still execute everything they need.
+RUN mkdir -p /home/nlm /data \
+ && chown -R 10001:10001 /home/nlm /data /app
+ENV HOME=/home/nlm
+USER 10001:10001
 
 EXPOSE 8000
 
