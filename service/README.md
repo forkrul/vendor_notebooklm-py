@@ -140,9 +140,13 @@ nix-shell -p "(import ./python-env.nix {})" --run "uvicorn service.main:app --re
 
 ## Upstream sync
 
-This is the **forkrul** vendor copy. Upstream (`origin = teng-lin/notebooklm-py`)
-is **fetch-only** — push is hard-disabled. Pull latest with:
+This is the **forkrul** vendor copy on the `master` branch. Upstream
+(`origin = teng-lin/notebooklm-py`, branch `main`) is **fetch-only** — push is
+hard-disabled. Pull latest with:
 
 ```bash
 ../scripts/sync-from-origin.sh
 ```
+
+The script rebases local `master` onto `origin/main` and pushes to
+`forkrul/master`. The branch-name asymmetry is intentional.

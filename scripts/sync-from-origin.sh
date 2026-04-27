@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 #
-# Fetch the latest from upstream (teng-lin/notebooklm-py) and rebase the local
-# main onto it, then push to the forkrul fork. Read-only against origin.
+# Fetch the latest from upstream (teng-lin/notebooklm-py, branch `main`) and
+# rebase the local `master` onto it, then push to the forkrul fork's `master`.
+# Read-only against origin.
+#
+# Note: upstream uses `main`; this fork uses `master` (matches forkrul's house
+# convention). The two branch names are intentional, not a typo.
 #
 # Conventions follow forkrul/domains: logs to stderr, data to stdout, --dry-run
 # supported, exit 0/1/2 = success/error/warning.
@@ -16,8 +20,9 @@ for arg in "$@"; do
       cat <<EOF
 Usage: $(basename "$0") [--dry-run]
 
-Fetch upstream (origin), rebase main onto origin/main, push to forkrul.
-Refuses to run if origin's pushurl is anything other than 'no_push'.
+Fetch upstream (origin), rebase local master onto origin/main, push to
+forkrul/master. Refuses to run if origin's pushurl is anything other than
+'no_push'.
 EOF
       exit 0
       ;;
@@ -50,8 +55,8 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 current_branch=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$current_branch" != "main" ]]; then
-  log "WARN: not on 'main' (currently on '$current_branch'). Continuing."
+if [[ "$current_branch" != "master" ]]; then
+  log "WARN: not on 'master' (currently on '$current_branch'). Continuing."
 fi
 
 log "Fetching origin (read-only) …"
@@ -62,23 +67,23 @@ else
 fi
 
 ahead=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "?")
-log "origin/main is $ahead commits ahead of local main."
+log "origin/main is $ahead commits ahead of local master."
 if [[ "$ahead" == "0" ]]; then
   log "Already up to date."
   exit 0
 fi
 
-log "Rebasing local main onto origin/main …"
+log "Rebasing local master onto origin/main …"
 if (( DRY_RUN )); then
   log "[dry-run] would: git rebase origin/main"
-  log "[dry-run] would: git push forkrul main --tags"
+  log "[dry-run] would: git push forkrul master --tags"
   exit 0
 fi
 
 git rebase origin/main
 
 log "Pushing to forkrul …"
-git push forkrul main
+git push forkrul master
 git push forkrul --tags
 
-log "Done. Local main is at $(git rev-parse --short HEAD)."
+log "Done. Local master is at $(git rev-parse --short HEAD)."
