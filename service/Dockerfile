@@ -1,47 +1,50 @@
 # syntax=docker/dockerfile:1.6
 #
-# Lean image: installs notebooklm-py (without browser extras) + FastAPI.
-# Authentication is provided at runtime by mounting the host's storage_state
-# at /data/storage_state.json (see docker-compose.yml).
+# NixOS-based image. The Python runtime and all third-party packages are
+# realised declaratively from nixpkgs via `service/python-env.nix`. The
+# notebooklm-py library is not yet in nixpkgs, so we expose it via PYTHONPATH
+# rather than pip-installing it (avoids mixing pip and nix in one tree).
+#
+# Auth: a Playwright `storage_state.json` is mounted at runtime under /data —
+# never bake credentials into the image.
 
-FROM python:3.12-slim AS base
+FROM nixos/nix:2.24.9
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    NIX_CONFIG="experimental-features = nix-command flakes" \
     NOTEBOOKLM_HOME=/data \
     NOTEBOOKLM_STORAGE_PATH=/data/storage_state.json
 
+# Refresh the nixpkgs channel (the base pins one, but it's old) and install
+# minimal runtime utilities. curl is used by the healthcheck; cacert gives
+# nixpkgs a TLS trust store.
+RUN nix-channel --update \
+ && nix-env -iA nixpkgs.curl nixpkgs.cacert nixpkgs.shadow
+
+# Build the Python environment declaratively. Cached as long as python-env.nix
+# is unchanged — this is the heavy layer.
+COPY service/python-env.nix /tmp/python-env.nix
+RUN nix-build /tmp/python-env.nix -o /python-env \
+ && nix-collect-garbage -d >/dev/null 2>&1 || true
+
+ENV PATH=/python-env/bin:/root/.nix-profile/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    PYTHONPATH=/app/src \
+    SSL_CERT_FILE=/root/.nix-profile/etc/ssl/certs/ca-bundle.crt
+
 WORKDIR /app
 
-# Install system deps. curl is here only so `docker exec` debugging is sane.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-
-# Copy only what's needed for installing the library first (better layer caching).
-COPY pyproject.toml README.md SKILL.md AGENTS.md /app/
+# Library and service code go in last — edits here don't bust the nix layers.
 COPY src /app/src
-
-# Install the library WITHOUT the [browser] extra — Playwright/Chromium are
-# unnecessary inside the service. Auth happens on the host via `notebooklm login`.
-RUN pip install /app
-
-# Service deps.
-COPY service/requirements.txt /app/service/requirements.txt
-RUN pip install -r /app/service/requirements.txt
-
-# Service code last — changes here don't bust the heavier layers above.
 COPY service /app/service
+COPY pyproject.toml README.md /app/
 
-# Non-root for safety. /data is the mount point for credentials.
-RUN useradd --create-home --uid 10001 nlm \
+# Non-root runtime user. /nix/store is world-readable so this is safe.
+RUN adduser -D -u 10001 nlm \
  && mkdir -p /data \
  && chown -R nlm:nlm /data /app
 USER nlm
 
 EXPOSE 8000
 
-# Default command. Override with `docker run … uvicorn …` if you need flags.
-CMD ["uvicorn", "service.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "service.main:app", "--host", "0.0.0.0", "--port", "8000"]

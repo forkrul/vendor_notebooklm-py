@@ -103,6 +103,25 @@ Other artifact types (video, quiz, flashcards, infographic, slide deck, mind map
 report, study guide, data table) live in the underlying library — add routes in
 `service/routes/artifacts.py` mirroring `generate_audio` when you need them.
 
+## Image
+
+The Docker image is based on **`nixos/nix:2.24.9`**. The Python runtime and all
+third-party libraries (fastapi, uvicorn, httpx, click, rich, pydantic) are
+realised declaratively from nixpkgs via [`python-env.nix`](python-env.nix) —
+there is no `pip install` inside the image.
+
+`notebooklm-py` itself is **not** in nixpkgs, so it is mounted via `PYTHONPATH`
+(`/app/src`) rather than installed. The library reads its version via
+`importlib.metadata` and falls back to `0.0.0.dev0` when not found, which is
+expected here.
+
+### Adding a Python dependency
+
+Two places to update (kept in sync manually):
+
+1. **`python-env.nix`** — the only one that affects the Docker image.
+2. **`requirements.txt`** — only used by the local-dev path below.
+
 ## Development without Docker
 
 ```bash
@@ -111,6 +130,12 @@ uv pip install -e ..[all]
 uv pip install -r requirements.txt
 export API_TOKEN=$(python -m service.auth)
 uvicorn service.main:app --reload
+```
+
+Or, if you have Nix on the host, drop straight into the same env the image uses:
+
+```bash
+nix-shell -p "(import ./python-env.nix {})" --run "uvicorn service.main:app --reload"
 ```
 
 ## Upstream sync
