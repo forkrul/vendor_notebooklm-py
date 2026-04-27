@@ -1,0 +1,26 @@
+services:
+  notebooklm-service:
+    build:
+      context: ..
+      dockerfile: service/Dockerfile
+    image: notebooklm-service:local
+    container_name: notebooklm-service
+    env_file:
+      - .env
+    environment:
+      NOTEBOOKLM_HOME: /data
+      NOTEBOOKLM_STORAGE_PATH: /data/storage_state.json
+    ports:
+      # Localhost-only by default. Change to "8000:8000" to expose on the LAN.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Mount the host's NotebookLM credentials read-only.
+      # Run `notebooklm login` on the host first to populate ~/.notebooklm/.
+      - "${NOTEBOOKLM_HOST_DIR:-${HOME}/.notebooklm}:/data:ro"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
